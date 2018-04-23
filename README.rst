@@ -23,7 +23,7 @@ Here's an example of how one might break down the overall
 goal of inviting friends over to watch a movie - this
 is the result of the ``tests/dojobber_example.py`` script.
 
-    .. image:: https://raw.githubusercontent.com/extrahop-networks/DoJobber/master/example.png
+    .. image:: https://raw.githubusercontent.com/ExtraHop/DoJobber/master/example.png
         :alt: DoJobber example graph
         :width: 90%
         :align: center
