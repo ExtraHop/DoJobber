@@ -1,0 +1,14 @@
+*.DS_Store
+*.a
+*.la
+*.lo
+*.o
+*.pyc
+*.so
+*.swo
+*.swp
+*~
+.eggs
+dojobber.egg-info
+build
+dist
