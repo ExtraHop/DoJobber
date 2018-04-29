@@ -63,6 +63,8 @@ for generating the internal graph.
 
 Check
 -----
+
+
 ``Check`` executes and, if it does not raise an Exception, is considered
 to have passed. If it passes then the Job passed and the next Job will
 run. It's purpose is to verify that we are in the desired state for
@@ -101,7 +103,8 @@ set_args method::
     dojob.configure(RootJob, ......)
     dojob.set_args('arg1', 'arg2', foo='foo', bar='bar', ...)
 
-Because of this it is best to accept both in your ``Check`` and ``Run`` methods::
+Because of this it is best to accept both in your ``Check`` and ``Run``
+methods::
 
     def Check(self, *args, **kwargs):
         ....
@@ -131,7 +134,7 @@ Storage (local)
 TBD
 
 Storage (global)
----------------
+----------------
 
 TBD
 
@@ -219,7 +222,7 @@ So an example ``Run`` may look like this::
         def Run(...):
             os.system('rm -rf /')
 
-In general, avoid ``RunonlyJob``s - it's better if you can understand if
+In general, avoid ``RunonlyJobs`` - it's better if you can understand if
 a change even needs making.
 
 Examples
@@ -229,3 +232,11 @@ The ``tests/dojobber_example.py`` script in the source directory is
 fully-functioning suite of tests with numerous comments strewn
 throughout.
 
+
+See Also
+========
+
+`Bri Hatch <https://www.ifokr.org/bri/>`_ gave a talk
+about DoJobber at LinuxFestNorthwest in 2018. You can find his
+`presentation <https://www.ifokr.org/bri/presentations/lfnw-2018-dojobber/>`_
+on his website.
