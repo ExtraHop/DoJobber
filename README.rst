@@ -239,4 +239,6 @@ See Also
 `Bri Hatch <https://www.ifokr.org/bri/>`_ gave a talk
 about DoJobber at LinuxFestNorthwest in 2018. You can find his
 `presentation <https://www.ifokr.org/bri/presentations/lfnw-2018-dojobber/>`_
-on his website.
+on his website, and the
+`presentation video <https://www.youtube.com/watch?v=BJtLw6Ndouw>`_ is
+available on YouTube.
