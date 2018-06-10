@@ -407,8 +407,8 @@ class DoJobber(object):
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            )
-        stdout, _ = proc.communicate(dot.write(self.graph))
+        )
+        stdout, _ = proc.communicate(dot.write(self.graph).encode())
 
         if proc.returncode != 0:
             raise RuntimeError(
