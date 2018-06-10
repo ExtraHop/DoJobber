@@ -23,11 +23,6 @@ This works, but it would be better to have this as something you can
 call via the dojobber.DoJobber object itself, which would make it
 cleaner and easier to unit test, for example.
 
-Python3 Support
----------------
-
-Python3 support shouldn't be terribly hard, we just haven't started it yet.
-
 Remove External Dependencies
 ----------------------------
 
