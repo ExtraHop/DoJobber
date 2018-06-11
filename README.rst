@@ -12,7 +12,7 @@ Jobs that have no unmet dependencies, working up the chain
 until it either reaches the root or cannot go further due to
 Job failures.
 
-Each Job serves a single purpose, and must be idempotent, 
+Each Job serves a single purpose, and must be idempotent,
 i.e. it will produce the same results if executed once or
 multiple times, without causing any unintended side effects.
 Because of this you can run your python script multiple times
@@ -128,15 +128,71 @@ An then in your ``Check``/``Run`` you can use them by name::
             raise Error('Really?')
 
 
-Storage (local)
----------------
+Local Job Storage
+-----------------
 
-TBD
+Local Storage allows you to share information between
+a Job's ``Check`` and ``Run`` methods. For example a ``Check``
+may do an expensive lookup or initialization which
+the ``Run`` may then use to speed up its work.
 
-Storage (global)
-----------------
+To use Local Job Storage, simply use the
+``self.storage`` dictionary from your ``Check`` and/or
+``Run`` methods.
 
-TBD
+Local Storage is not available to any other Jobs. See
+Global Job Storage for how you can share information
+between Jobs.
+
+Example::
+
+	class UselessExample(Job):
+        def Check(self, \*dummy_args, **dummy_kwargs):
+            if not self.storage.get('sql_username'):
+            self.storage['sql_username'] = (some expensive API call)
+            (check something)
+        
+        def Run(self, *dummy_args, **kwargs):
+            subprocess.call(COMMAND + [self.storage['sql_username']])
+
+
+Global Job Storage
+------------------
+
+Global Storage allows you to share information between
+Jobs. Naturally it is up to you to assure any
+Job that requires Global Storage is defined as
+dependent on the Job(s) that set Global Storage.
+
+To use Global Job Storage, simply use the
+``self.global_storage`` dictionary from your
+``Check`` and/or ``Run`` methods.
+
+Global Storage is available to all Jobs. It is up to
+you to avoid naming collisions.
+
+
+Example::
+
+    # Store the number of CPUs on this machine for later
+    # Jobs to use for nefarious purposes.
+    class CountCPUs(Job):
+        def Check(self, *dummy_args, **dummy_kwargs):
+            self.global_storage['num_cpus'] = len(
+                [x
+                 for x in open('/proc/cpuinfo').readlines()
+                 if 'vendor_id' in x])
+
+    # FixFanSpeed is dependent on CountCPUs
+    class FixFanSpeed(Job):
+        DEPS = (CountCPUs,)
+
+        def Check(self, *args, **kwargs):
+            for cpu in range(self.global_storage['num_cpus']):
+                ....
+
+
+
 
 Cleanup
 -------
@@ -157,7 +213,65 @@ Cleanup from happening and run it manually if you prefer::
 Creating Jobs Dynamically
 -------------------------
 
-TBD
+You can dynamically create Jobs by making new Job classes
+and adding them to the DEPS of an existing class. This is
+useful if you need to create new Jobs based on commandline
+options. Dynamically creating many small single-purpose jobs
+is a better pattern than creating one large monolithic
+job that dynamically determines what it needs to do and check.
+
+Here's an example of how you could create a new Job dynamically.
+We start with a base Job, ``SendInvite``, which has uninitialized
+class valiables ``EMAIL`` and ``NAME``::
+
+    # Base Job
+    class SendInvite(Job):
+        EMAIL = None
+        NAME = None
+    
+        def Check(self, *args, **kwargs):
+            r = requests.get(
+                'https://api.example.com/invited/' + self.EMAIL)
+            assert(r.status_code == 200)
+
+        def Run(self, *args, **kwargs):
+            requests.post(
+                'https://api.example.com/invite/' + self.EMAIL)
+
+
+This example Job has ``Check``/``Run`` methods which use class
+variables ``EMAIL`` and ``NAME`` for their configuration.
+
+So to get new Jobs based on this class, you create them and them
+to the ``DEPS`` of an existing Job such that they appear in the graph::
+
+    class InviteFriends(DummyJob):
+        """Job that will become dynamically dependent on other Jobs."""
+        DEPS = []
+        
+
+    def invite_friends(people):
+        """Add Invite Jobs for these people.
+
+        People is a list of dictionaries with keys email and name.
+        """
+        for person in people:
+            job = type('Invite {}'.format(person['name']),
+                       (SendInvite,), {})
+            job.EMAIL = person['email']
+            job.NAME = person['name']
+            InviteFriends.DEPS.append(job)
+
+    def main():
+        # do a bunch of stuff
+        ...
+        
+        # Dynamically add new Jobs to the InviteFriends
+        invite_friends([
+            {'name': 'Wendell Bagg', 'email': 'bagg@example.com'},
+            {'name': 'Lawyer Cat', 'email': 'lawyercat@example.com'}
+        ])
+
 
 Job Types
 =========
