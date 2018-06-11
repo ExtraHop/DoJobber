@@ -16,6 +16,7 @@ Enjoy!
 import argparse
 import logging
 import os
+import sys
 
 import dojobber
 # These 'from...imports' just decrease typing when making your classes
@@ -434,6 +435,8 @@ def main():
     if args.png_output:
         out = open(args.png_output, 'w')
         dojob.write_graph(out)
+
+    sys.exit(0 if dojob.success() else 1)
 
 
 if __name__ == '__main__':
