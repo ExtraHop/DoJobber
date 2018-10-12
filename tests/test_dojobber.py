@@ -52,12 +52,12 @@ class Tests(unittest.TestCase):
         }
 
         # Verify our checknrun went as expected
-        self.assertEqual(dojob.nodestatus, expected)
+        self.assertEqual(expected, dojob.nodestatus)
         self.assertFalse(dojob.success())
 
         # Verify our exception / return value handling is working
-        self.assertEqual(str(dojob.nodeexceptions['TurnOnTV']),
-                         "Remote batteries are dead.")
+        self.assertEqual("Remote batteries are dead.",
+                         str(dojob.nodeexceptions['TurnOnTV']))
 
     def test_success_example(self):
         """Test our example dojobber that fully passes."""
@@ -88,7 +88,7 @@ class Tests(unittest.TestCase):
         }
 
         # Verify our checknrun went as expected
-        self.assertEqual(dojob.nodestatus, expected)
+        self.assertEqual(expected, dojob.nodestatus)
         self.assertTrue(dojob.success())
 
     def test_runonly_node_succes(self):
@@ -97,9 +97,9 @@ class Tests(unittest.TestCase):
         dojob.configure(RunonlyTest_Succeed)
         dojob.checknrun()
         self.assertTrue(dojob.success())
-        self.assertEqual(dojob.nodestatus, {'RunonlyTest_Succeed': True})
-        self.assertEqual(dojob.noderesults['RunonlyTest_Succeed'],
-                         'Mitchell!!!')
+        self.assertEqual({'RunonlyTest_Succeed': True}, dojob.nodestatus)
+        self.assertEqual('Mitchell!!!',
+                         dojob.noderesults['RunonlyTest_Succeed'])
 
     def test_runonly_node_failure(self):
         """Test that a runonly node with a failing Run fails right."""
@@ -108,9 +108,9 @@ class Tests(unittest.TestCase):
         dojob.configure(RunonlyTest_Fail)
         dojob.checknrun()
         self.assertFalse(dojob.success())
-        self.assertEqual(dojob.nodestatus, {'RunonlyTest_Fail': False})
-        self.assertEqual(str(dojob.nodeexceptions['RunonlyTest_Fail']),
-                         'Are you with the bride or with the failure?')
+        self.assertEqual({'RunonlyTest_Fail': False}, dojob.nodestatus)
+        self.assertEqual('Are you with the bride or with the failure?',
+                         str(dojob.nodeexceptions['RunonlyTest_Fail']))
 
     def test_runonly_node_no_act(self):
         """Test that a runonly node in no_act mode does not run the Run."""
@@ -119,18 +119,18 @@ class Tests(unittest.TestCase):
         dojob = dojobber.DoJobber()
         dojob.configure(RunonlyTest_Fail, no_act=True)
         dojob.checknrun()
-        self.assertEqual(dojob.nodestatus, {'RunonlyTest_Fail': False})
-        self.assertEqual(str(dojob.nodeexceptions['RunonlyTest_Fail']),
-                         'Runonly node check intentionally fails first time.')
+        self.assertEqual({'RunonlyTest_Fail': False}, dojob.nodestatus)
+        self.assertEqual('Runonly node check intentionally fails first time.',
+                         str(dojob.nodeexceptions['RunonlyTest_Fail']))
 
         # A RunonlyJob that has a successful Run method should still fail
         # in no_act mode
         dojob = dojobber.DoJobber()
         dojob.configure(RunonlyTest_Succeed, no_act=True)
         dojob.checknrun()
-        self.assertEqual(dojob.nodestatus, {'RunonlyTest_Succeed': False})
-        self.assertEqual(str(dojob.nodeexceptions['RunonlyTest_Succeed']),
-                         'Runonly node check intentionally fails first time.')
+        self.assertEqual({'RunonlyTest_Succeed': False}, dojob.nodestatus)
+        self.assertEqual('Runonly node check intentionally fails first time.',
+                         str(dojob.nodeexceptions['RunonlyTest_Succeed']))
 
     def test_cleanran(self):
         """Test that our cleanup ran."""
