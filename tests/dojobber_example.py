@@ -161,6 +161,91 @@ class PrepareRoom(DummyJob):
     DEPS = (CleanCouch, FluffPillows)
 
 
+class PopcornBowl(DummyJob):
+    """Get a popcorn bowl from the dishwasher
+
+    This example includes TRIES and RETRY_DELAY options.
+
+    TRIES defines the number of tries (check/run/recheck cycles)
+    that the Job is allowed to do before giving up.
+
+    The TRIES default if unspecified is 3, which can be changed
+    in configure() via the default_tries=### argument.
+
+    RETRY_DELAY is the minimum amount of time to wait between
+    tries of *this* Job.
+
+    The RETRY_DELAY default if unspecified is 3, which can be changed
+    in configure() via the default_retry_delay=### argument.
+
+    When a Job has a failure it is not immediately retried.
+    Instead we will hit all Jobs in the graph that are still
+    awaiting check/run/recheck. Once every reachabel Job has
+    been hit we will 'start over' on the Jobs that failed.
+
+    In practice this means that you aren't wasting as much
+    RETRY_DELAY because other Jobs were likely doing work
+    between retries of this Job. (Unless your graph is
+    highly linear and there are no unblocked Jobs.)
+    """
+    TRIES = 8  # The default is 1, i.e. no retries
+    RETRY_DELAY = 0.001
+
+    def Check(self, *_, **kwargs):
+        # Simulate failures and eventual successes
+        success_try = kwargs.get('bowl_success_try') or self.TRIES
+        if self.global_storage.get('bowl_failcount', 0) < success_try:
+            raise RuntimeError("Dishwasher cycle not done yet.")
+
+    def Run(self, *_, **kwargs):
+        self.global_storage['bowl_failcount'] = (
+            self.global_storage.get('bowl_failcount', 0) + 1)
+
+
+class Pizza(RunonlyJob):
+    """Get pizza.
+
+    In reality this would make no sense as a RunonlyJob, however
+    it is implemented this way here for unit testing purposes.
+    """
+    TRIES = 3
+
+    def Run(self, *_, **kwargs):
+        # Simulate failures and eventual successes
+        self.global_storage['pizza_failcount'] = (
+            self.global_storage.get('pizza_failcount', 0) + 1)
+        success_try = kwargs.get('pizza_success_try') or self.TRIES
+        if self.global_storage.get('pizza_failcount', 0) < success_try:
+            raise RuntimeError("Giordano's did not arrive yet.")
+
+
+class Popcorn(Job):
+    """Get Popcorn.
+
+    Does retries, similar to Pizza above.
+    """
+    DEPS = (PopcornBowl,)
+    # Popcorn.TRIES is intentionally lower than PopcornBowl.TRIES so
+    # we assure through unit tests that our retry counting logic is
+    # based on individual Job retries, not on global Job retries.
+    TRIES = PopcornBowl.TRIES - 3
+
+    def Check(self, *_, **kwargs):
+        # Simulate failures and eventual successes
+        success_try = kwargs.get('pop_success_try') or self.TRIES
+        if self.global_storage.get('pop_failcount', 0) < success_try:
+            raise RuntimeError('Still popping...')
+
+    def Run(self, *_, **kwargs):
+        self.global_storage['pop_failcount'] = (
+            self.global_storage.get('pop_failcount', 0) + 1)
+
+
+class Food(DummyJob):
+    """Get noshies."""
+    DEPS = (Popcorn, Pizza)
+
+
 class SitOnCouch(Job):
     """Sit on the couch."""
     DEPS = (PrepareRoom,)
@@ -170,7 +255,7 @@ class SitOnCouch(Job):
             raise RuntimeError('No space on couch.')
 
     def Run(self, *_, **kwargs):
-        pass 
+        pass
 
 
 class DetermineDetails(DummyJob):
@@ -299,7 +384,7 @@ class TurnOnTV(Job):
 
 
 class StartMovie(Job):
-    DEPS = (FriendsArrive, PrepareRoom, TurnOnTV, InsertDVD, SitOnCouch)
+    DEPS = (FriendsArrive, PrepareRoom, TurnOnTV, InsertDVD, SitOnCouch, Food)
 
     def Check(self, *dummy_args, **dummy_kwargs):
         pass
@@ -382,6 +467,33 @@ def handle_args():
         action='store_true',
         help='There is room on the couch for you to sit.',)
 
+    group = myparser.add_argument_group(
+        title='Retry Testing',
+        description='Try values higher than the max tries to see failures'
+                    ' or smaller to succeed sooner. Best with -v so you can'
+                    ' see how unblocked Jobs are retried interleaved rather'
+                    ' than repeatedly.')
+    group.add_argument(
+        '--pop_success_try', dest='pop_success', type=int, metavar='#',
+        help='Achieve sucess on the Popcorn Job at this number of tries.'
+             ' By default this contrived example will succeed on the last try.'
+             ' Values higher than {} will cause this to fail, so you can test'
+             ' the retry logic.'.format(Popcorn.TRIES))
+
+    group.add_argument(
+        '--bowl_success_try', dest='bowl_success', type=int, metavar='#',
+        help='Achieve sucess on the PopcornBowl Job at this number of tries.'
+             ' By default this contrived example will succeed on the last try.'
+             ' Values higher than {} will cause this to fail, so you can test'
+             ' the retry logic.'.format(PopcornBowl.TRIES))
+
+    group.add_argument(
+        '--pizza_success_try', dest='pizza_success_try', type=int, metavar='#',
+        help='Achieve sucess on the Pizza Job at this number of tries.'
+             ' By default this contrived example will succeed on the last try.'
+             ' Values higher than {} will cause this to fail, so you can test'
+             ' the retry logic.'.format(Pizza.TRIES))
+
     # Parsing time!
     args = myparser.parse_args()
 
@@ -410,6 +522,7 @@ def main():
         WatchMovie,
         no_act=args.no_act,
         verbose=args.verbose,
+        default_retry_delay=0,
         debug=args.debug)
 
     ## Since all our argument names are the same as the kwargs keys,

@@ -30,19 +30,3 @@ Remove need for the following:
 
 * dot binary (graphviz package)
 * display binary (imagemagick package)
-
-Retries
--------
-
-Some Jobs may execute quickly, but the results will not be accurate
-immediately. For example you may make an API call to a remote system
-and it may take time for it to complete, and until it's done the
-Check will fail.
-
-Implement a retry option, where processing can continue on any
-non-blocked Jobs, once those are exhausted you start retrying any
-retry-able Jobs, with a sleep inbetween if you run out. This
-will prevent us from needing to re-run the entire script
-when the delays are out of our control.
-
-Proposed retry inputs: max time to retry, min time between retries.

@@ -4,6 +4,7 @@
 # standard
 import os
 import sys
+import time
 import traceback
 import subprocess
 import distutils.spawn
@@ -37,6 +38,8 @@ if not distutils.spawn.find_executable('display'):
 
 class Job(object):
     """Job Class."""
+    TRIES = None  # Override in your Job if desired
+    RETRY_DELAY = None  # Override in your Job if desired
 
     def __init__(self):  # pylint:disable=super-init-not-called
         """Initialization.
@@ -160,6 +163,10 @@ class DoJobber(object):
         self.nodestatus = {}
         self.nodeexceptions = {}
         self.noderesults = {}
+        self._run_phase = 0
+        self._retry = {}  # retries left, sleep time, etc
+        self._default_tries = None  # number of tries for jobs that set no value
+        self._default_delay = None  # default delay between Job retries
 
         self._args = []  # Args for Check/Run methods
         self._kwargs = {}  # KWArgs for Check/Run methods
@@ -214,8 +221,14 @@ class DoJobber(object):
         """Returns T/F if the checknrun had any failure nodes."""
         return not self.success()
 
-    def configure(self, root, no_act=False, verbose=False, debug=False,
-                  cleanup=True):
+    def configure(self,
+                  root,
+                  no_act=False,
+                  verbose=False,
+                  debug=False,
+                  cleanup=True,
+                  default_tries=3,
+                  default_retry_delay=1):
         """Configure the graph for a specified root Job.
 
         no_act: only run Checks, do not make changes (i.e. no Run)
@@ -223,13 +236,20 @@ class DoJobber(object):
                  failure output
         debug: show full stacktrace on failure of check/run/recheck
         cleanup: run any Cleanup methods on classes once checknrun is complete
+        default_tries: number of tries available for each Job if not otherwise
+                       specified via the TRIES attribute
+        default_retry_delay: mininum delay between tries of a specific Job if not
+                             otherwise specified via the RETRY_DELAY attribute
         """
         self._no_act = no_act
         self._debug = debug
         self._verbose = self._debug or verbose
         self._root = root
-        self._load_class()
+        self._default_tries = default_tries
+        self._default_retry_delay = default_retry_delay
         self._cleanup = cleanup
+
+        self._load_class()
 
     def set_args(self, *args, **kwargs):
         """Set the arguments that will be sent to all Check/Run methods."""
@@ -291,7 +311,31 @@ class DoJobber(object):
         self._checknrun_cwd = os.path.realpath(os.curdir)
         self._checknrun_storage = {'__global': {}}
         self.nodestatus = {}
-        self._checknrun(node)
+
+        trynum = 0
+        while True:
+            self._checknrun(node)
+            if self.success():
+                break
+            self._run_phase += 1
+
+            # quit if we're out of tries
+            # Only 'False' Jobs (have been tried but failed)
+            # are retriable - others were either successful or
+            # are blocked by other failed Jobs.
+            retriable = ['{} => {}'.format(x, self.nodestatus[x])
+                         for x in self._retry
+                         if self.nodestatus[x] == False and
+                            self._retry[x]['tries'] > 0]
+            if not retriable:
+                break
+
+            # Do not retry at all in no-act mode
+            if self._no_act:
+                break
+
+            trynum += 1
+
         os.chdir(self._checknrun_cwd)
         if self._cleanup:
             self.cleanup()
@@ -314,16 +358,33 @@ class DoJobber(object):
             if depnode == nodename:
                 continue
 
-            # Run them
-            if self.nodestatus.get(depnode, None) is None:
+            # Run dependent nodes if not already successful
+            if not self.nodestatus.get(depnode):
                 self._checknrun(depnode)
 
-            # Were they happy?
-            if not self.nodestatus.get(depnode, None):
+            # Were all dependent nodes happy?
+            if not self.nodestatus.get(depnode):
                 blocked = True
 
-        self._node_untested(nodename)
+        # Set as untested if not visited yet
+        if nodename not in self.nodestatus:
+            self._node_untested(nodename)
+
         if not blocked:
+            if not self._run_phase > self._retry[nodename]['lastphase']:
+                # Already tried - skip
+                return
+            if not self._retry[nodename]['tries']:
+                # Too many tries - abort
+                return
+            sleeptime = self._retry[nodename]['nexttry'] - time.time()
+            if sleeptime > 0:
+                time.sleep(sleeptime)
+            self._retry[nodename]['nexttry'] = (
+                time.time() + self._retry[nodename]['retry_delay'])
+            self._retry[nodename]['lastphase'] = self._run_phase
+            self._retry[nodename]['tries'] -= 1
+
             obj = self._classmap[nodename]()
             self._checknrun_storage[nodename] = {}
             obj._set_storage(
@@ -395,7 +456,6 @@ class DoJobber(object):
 
     def _load_class(self):
         """Generate internal graph for a checkrun class."""
-
         self._init_deps(self._root)
         self._init_graph()
 
@@ -459,6 +519,30 @@ class DoJobber(object):
         self._classmap[classname] = theclass
         self.graph.add_node(classname)
         deps = getattr(theclass, 'DEPS', [])
+        tries = (getattr(theclass, 'TRIES')
+                 if getattr(theclass, 'TRIES', None) is not None
+                 else self._default_tries)
+        delay = (getattr(theclass, 'RETRY_DELAY')
+                 if getattr(theclass, 'RETRY_DELAY', None) is not None
+                 else self._default_retry_delay)
+        if delay < 0:
+            raise RuntimeError(
+                'RETRY_DELAY "{}" cannot be negative'.format(delay))
+        if int(tries) < 1:
+            raise RuntimeError('TRIES "{}" must be >= 1.'.format(tries))
+
+        self._retry[classname] = {
+                # How many more tries we can have
+                'tries': tries,
+
+                # How long to wait between retries
+                'retry_delay': delay,
+
+                # How soon we can do the next try
+                'nexttry': time.time(),
+
+                # In which phase did we do our most recent try
+                'lastphase': -1}
 
         for dep in deps:
             self._init_deps(dep)

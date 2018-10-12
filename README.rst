@@ -52,7 +52,7 @@ Each Job is is own class. Here's an example::
         def Run(self, *dummy_args, **dummy_kwargs):
             pass
 
-Each Job has a DEPS variable, ``Check`` method, and ``Run`` method.
+Each Job has a DEPS attribute, ``Check`` method, and ``Run`` method.
 
 DEPS
 ----
@@ -151,7 +151,7 @@ Example::
             if not self.storage.get('sql_username'):
             self.storage['sql_username'] = (some expensive API call)
             (check something)
-        
+
         def Run(self, *dummy_args, **kwargs):
             subprocess.call(COMMAND + [self.storage['sql_username']])
 
@@ -191,9 +191,6 @@ Example::
             for cpu in range(self.global_storage['num_cpus']):
                 ....
 
-
-
-
 Cleanup
 -------
 
@@ -228,7 +225,7 @@ class valiables ``EMAIL`` and ``NAME``::
     class SendInvite(Job):
         EMAIL = None
         NAME = None
-    
+
         def Check(self, *args, **kwargs):
             r = requests.get(
                 'https://api.example.com/invited/' + self.EMAIL)
@@ -240,7 +237,7 @@ class valiables ``EMAIL`` and ``NAME``::
 
 
 This example Job has ``Check``/``Run`` methods which use class
-variables ``EMAIL`` and ``NAME`` for their configuration.
+attribute ``EMAIL`` and ``NAME`` for their configuration.
 
 So to get new Jobs based on this class, you create them and them
 to the ``DEPS`` of an existing Job such that they appear in the graph::
@@ -248,7 +245,7 @@ to the ``DEPS`` of an existing Job such that they appear in the graph::
     class InviteFriends(DummyJob):
         """Job that will become dynamically dependent on other Jobs."""
         DEPS = []
-        
+
 
     def invite_friends(people):
         """Add Invite Jobs for these people.
@@ -265,13 +262,155 @@ to the ``DEPS`` of an existing Job such that they appear in the graph::
     def main():
         # do a bunch of stuff
         ...
-        
+
         # Dynamically add new Jobs to the InviteFriends
         invite_friends([
             {'name': 'Wendell Bagg', 'email': 'bagg@example.com'},
             {'name': 'Lawyer Cat', 'email': 'lawyercat@example.com'}
         ])
 
+
+Retry Logic
+===========
+
+DoJobber is meant to be able to be retried over and over until
+you achieve success. You may be tempted to write something like
+this::
+
+
+	...
+    retry = 5
+    while retry:
+        dojob.checknrun()
+        if dojob.success():
+            break
+        print('Trying again...')
+        retry -= 1
+
+However this is not necessary, and in fact is a waste of computing
+cycles. The above code would cause us to check even the already
+successful nodes unnecessarily, slowing everything down.
+
+Instead, you can use two class attribute to configure retry
+parameters. ``TRIES`` specifies how many times your Job can
+erun before we give up, and ``RETRY_DELAY`` specifies the
+minimum amount of time between retries.
+
+Retries are useful for those cases where an action in ``Run``
+fails due to a temporary condition (maybe the remote server
+is unavailable briefly), or where the activities triggered
+in the ``Run`` take time to complete (maybe an API call
+returns immediately, but background fullfillment takes 30
+seconds).
+
+By relying on retry logic, instead of adding in arbirtary
+``sleep`` cycles in your code, you can have a more robust
+Job graph.
+
+Storage Considerations
+----------------------
+
+When a Job is retried, it will be created from scratch. This means
+that ``storage`` **is not available between runs**, however ``global_storage``
+is. This is done to keep things as pristine as possible between
+Job executions.
+
+TRIES Attribute
+--------------
+TRIES defines the number of tries (check/run/recheck cycles)
+that the Job is allowed to do before giving up. It must be >= 1.
+
+The TRIES default if unspecified is 3, which can be changed
+in ``configure()`` via the ``default_tries=###`` argument, for
+example::
+
+    class Foo(Job):
+        TRIES = 10
+        ...
+
+    class Bar(Job):
+        DEPS = (Foo,)
+        ...   # No TRIES attribute
+
+    ...
+
+    dojob = dojobber.DoJobber()
+    dojob.configure(Foo, default_tries=1)
+
+In the above case, Foo can be tried 10 times, while Bar can only be
+tried 1 time, since it has no ``TRIES`` specified and ``default_tries``
+in configure is 1.
+
+RETRY_DELAY
+-----------
+
+RETRY_DELAY defines the minimum amount of time to wait between
+tries (check/run/recheck cycles) of **this** Job before giving
+up with permanent failure. It is measured in seconds, and may
+be any non-negative numeric value, including 0 and fractional
+seconds like 0.02.
+
+
+The RETRY_DELAY default if unspecified is 1 , which can be
+changed in ``configure()`` via the ``default_retry-delay=###`` argument,
+for example::
+
+    class Foo(Job):
+        RETRY_DELAY = 10.5  # A long but strangely precise value...
+        ...
+
+    class Bar(Job):
+        DEPS = (Foo,)
+        ...   # No RETRY_DELAY attribute
+
+    ...
+
+    dojob = dojobber.DoJobber()
+    dojob.configure(Foo, default_retry_delay=0.5)
+
+In the above case, Foo will never start unless at least 10.5 seconds
+have passed since the previous Foo attempt, while Bar only required
+0.5 seconds have passed since it has no ``RETRY_DELAY`` specified
+and ``default_retry_delay`` in configure is 0.5.
+
+Delay minimization
+------------------
+
+When a Job has a failure it is not immediately retried.
+Instead we will hit all Jobs in the graph that are still
+awaiting check/run/recheck. Once every reachable Job has
+been hit we will 'start over' on the Jobs that failed.
+
+In practice this means that you aren't wasting the full
+RETRY_DELAY because other Jobs were likely doing work
+between retries of this Job. (Unless your graph is
+highly linear and there are no unblocked Jobs.)
+
+You can see how Job retries are interleaved by looking
+at the example code::
+
+    $ tests/dojobber_example.py -v | grep 'recheck: fail'
+    TurnOnTV.recheck: fail "Remote batteries are dead."
+    SitOnCouch.recheck: fail "No space on couch."
+    PopcornBowl.recheck: fail "Dishwasher cycle not done yet."
+    Pizza.recheck: fail "Giordano's did not arrive yet."
+    TurnOnTV.recheck: fail "Remote batteries are dead."
+    SitOnCouch.recheck: fail "No space on couch."
+    PopcornBowl.recheck: fail "Dishwasher cycle not done yet."
+    Pizza.recheck: fail "Giordano's did not arrive yet."
+    TurnOnTV.recheck: fail "Remote batteries are dead."
+    SitOnCouch.recheck: fail "No space on couch."
+    PopcornBowl.recheck: fail "Dishwasher cycle not done yet."
+    PopcornBowl.recheck: fail "Dishwasher cycle not done yet."
+    PopcornBowl.recheck: fail "Dishwasher cycle not done yet."
+    Popcorn.recheck: fail "Still popping..."
+    Popcorn.recheck: fail "Still popping..."
+
+Note initially we have several Jobs that fail on
+distinct branches, and these can be retried in a round-robin
+sort of fashion. Only once we end up at strict dependencies
+of PopcornBowl and Popcorn do we see single Jobs being retried
+without others getting their time.
 
 Job Types
 =========
@@ -282,7 +421,7 @@ Job
 ---
 
 Job requires a ``Check``, ``Run``, and may have optional Cleanup::
-    
+
     class CreateUser(Job):
         """Create our user's account."""
 

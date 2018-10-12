@@ -31,7 +31,7 @@ class Tests(unittest.TestCase):
     def test_default_example(self):
         """Test our example dojobber test results that have some failures."""
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.WatchMovie)
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
         dojob.set_args('arg1', movie='Noises Off', battery_state='dead')
         dojob.checknrun()
         expected = {
@@ -39,10 +39,14 @@ class Tests(unittest.TestCase):
             'DetermineDetails': True,
             'FindTVRemote': True,
             'FluffPillows': True,
+            'Food': True,
             'FriendsArrive': True,
             'InsertDVD': True,
             'InviteFriends': True,
             'PickTimeAndDate': True,
+            'Pizza': True,
+            'Popcorn': True,
+            'PopcornBowl': True,
             'PrepareRoom': True,
             'SitOnCouch': False,
             'StartMovie': None,
@@ -61,24 +65,29 @@ class Tests(unittest.TestCase):
 
     def test_success_example(self):
         """Test our example dojobber that fully passes."""
-        self.maxDiff = 999
+        self.maxDiff = 9999
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.WatchMovie)
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
         dojob.set_args(
             'arg1',
             movie='MST3K',
             battery_state='charged',
-            couch_space=True)
+            couch_space=True,
+            fake_retry_success=True)
         dojob.checknrun()
         expected = {
             'CleanCouch': True,
             'DetermineDetails': True,
             'FindTVRemote': True,
             'FluffPillows': True,
+            'Food': True,
             'FriendsArrive': True,
             'InsertDVD': True,
             'InviteFriends': True,
             'PickTimeAndDate': True,
+            'Pizza': True,
+            'Popcorn': True,
+            'PopcornBowl': True,
             'PrepareRoom': True,
             'SitOnCouch': True,
             'StartMovie': True,
@@ -94,7 +103,7 @@ class Tests(unittest.TestCase):
     def test_runonly_node_succes(self):
         """Test that a runonly node with a successful Run works right."""
         dojob = dojobber.DoJobber()
-        dojob.configure(RunonlyTest_Succeed)
+        dojob.configure(RunonlyTest_Succeed, default_retry_delay=0)
         dojob.checknrun()
         self.assertTrue(dojob.success())
         self.assertEqual({'RunonlyTest_Succeed': True}, dojob.nodestatus)
@@ -105,7 +114,7 @@ class Tests(unittest.TestCase):
         """Test that a runonly node with a failing Run fails right."""
 
         dojob = dojobber.DoJobber()
-        dojob.configure(RunonlyTest_Fail)
+        dojob.configure(RunonlyTest_Fail, default_retry_delay=0, default_tries=1.1)
         dojob.checknrun()
         self.assertFalse(dojob.success())
         self.assertEqual({'RunonlyTest_Fail': False}, dojob.nodestatus)
@@ -135,7 +144,7 @@ class Tests(unittest.TestCase):
     def test_cleanran(self):
         """Test that our cleanup ran."""
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.WatchMovie)
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
         unittest_dict = {}
         dojob.set_args('arg1', unittest_dict=unittest_dict)
         dojob.checknrun()
@@ -144,7 +153,7 @@ class Tests(unittest.TestCase):
     def test_clean_preventable(self):
         """Test that our cleanup can be prevented via configure."""
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.WatchMovie, cleanup=False)
+        dojob.configure(doex.WatchMovie, cleanup=False, default_retry_delay=0)
         unittest_dict = {}
         dojob.set_args('arg1', unittest_dict=unittest_dict)
         dojob.checknrun()
@@ -157,14 +166,14 @@ class Tests(unittest.TestCase):
     def test_success_conditions(self):
         """Test our success checks based on some example subgraphs."""
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.WatchMovie)
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
         dojob.set_args()
         dojob.checknrun()
         self.assertFalse(dojob.success())
         self.assertTrue(dojob.partial_success())
 
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.PrepareRoom)
+        dojob.configure(doex.PrepareRoom, default_retry_delay=0)
         dojob.set_args()
         self.assertFalse(dojob.success())
         dojob.checknrun()
@@ -172,11 +181,78 @@ class Tests(unittest.TestCase):
         self.assertTrue(dojob.partial_success())
 
         dojob = dojobber.DoJobber()
-        dojob.configure(doex.TurnOnTV)
+        dojob.configure(doex.TurnOnTV, default_retry_delay=0)
         dojob.set_args()
         dojob.checknrun()
         self.assertFalse(dojob.success())
         self.assertTrue(dojob.partial_success())
+
+    def test_retry(self):
+        """Test our example dojobber and tweak when retries succeed."""
+        expected = {
+            'CleanCouch': True,
+            'DetermineDetails': True,
+            'FindTVRemote': True,
+            'FluffPillows': True,
+            'FriendsArrive': True,
+            'InsertDVD': True,
+            'InviteFriends': True,
+            'PickTimeAndDate': True,
+            'PrepareRoom': True,
+            'SitOnCouch': False,
+            'StartMovie': None,
+            'ValidateMovie': True,
+            'TurnOnTV': False,
+            'WatchMovie': None,
+        }
+
+        # Everything succeeds
+        expected.update({'Food': True, 'Pizza': True,
+                         'PopcornBowl': True, 'Popcorn': True})
+        dojob = dojobber.DoJobber()
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
+        dojob.set_args('arg1', movie='Noises Off', battery_state='dead',
+                pizza_success_try=doex.Pizza.TRIES,
+                pop_success_try=doex.Popcorn.TRIES,
+                bowl_success_try=doex.PopcornBowl.TRIES)
+        dojob.checknrun()
+        self.assertEqual(expected, dojob.nodestatus)
+
+        # PopcornBowl, the first node, fails.
+        expected.update({'Food': None, 'Pizza': True,
+                         'PopcornBowl': False, 'Popcorn': None})
+        dojob = dojobber.DoJobber()
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
+        dojob.set_args('arg1', movie='Noises Off', battery_state='dead',
+                pizza_success_try=doex.Pizza.TRIES,
+                pop_success_try=doex.Popcorn.TRIES,
+                bowl_success_try=doex.PopcornBowl.TRIES + 1)
+        dojob.checknrun()
+        self.assertEqual(expected, dojob.nodestatus)
+
+        # Popcorn, the second node, fails
+        expected.update({'Food': None, 'Pizza': True,
+                         'PopcornBowl': True, 'Popcorn': False})
+        dojob = dojobber.DoJobber()
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
+        dojob.set_args('arg1', movie='Noises Off', battery_state='dead',
+                pizza_success_try=doex.Pizza.TRIES,
+                pop_success_try=doex.Popcorn.TRIES + 1,
+                bowl_success_try=doex.PopcornBowl.TRIES)
+        dojob.checknrun()
+        self.assertEqual(expected, dojob.nodestatus)
+
+        # Fail our Pizza and Popcorn
+        expected.update({'Food': None, 'Pizza': False,
+                         'PopcornBowl': True, 'Popcorn': False})
+        dojob = dojobber.DoJobber()
+        dojob.configure(doex.WatchMovie, default_retry_delay=0)
+        dojob.set_args('arg1', movie='Noises Off', battery_state='dead',
+                pizza_success_try=doex.Pizza.TRIES + 1,
+                pop_success_try=doex.Popcorn.TRIES + 1,
+                bowl_success_try=doex.PopcornBowl.TRIES)
+        dojob.checknrun()
+        self.assertEqual(expected, dojob.nodestatus)
 
 
 if __name__ == '__main__':
