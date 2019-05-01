@@ -478,6 +478,58 @@ So an example ``Run`` may look like this::
 In general, avoid ``RunonlyJobs`` - it's better if you can understand if
 a change even needs making.
 
+Debugging and Logging
+=====================
+
+There are two types of logging for DoJobber: runtime information
+about Job success/failure for anyone wanting more details
+about the processing of your Jobs, and developer DoJobber
+debugging which is useful when writing your DoJobber code.
+
+Runtime Debugging
+-----------------
+
+To increase verbosity of Job success and failures you
+pass `verbose` or `debug` keyword arguments to `configure`::
+
+    dojob = dojobber.DoJobber()
+    dojob.configure(RootJob, verbose=True, ....)
+    # or
+    dojob.configure(RootJob, debug=True, ....)
+
+Setting `verbose` will show a line of check/run/recheck status
+to stderr, as well as any failure output from rechecks, such as::
+
+    FindTVRemote.check: fail
+    FindTVRemote.run: pass
+    FindTVRemote.recheck: pass
+    TurnOnTV.check: fail
+    TurnOnTV.run: pass
+    ...
+
+Using `debug` will additionally show a full stacktrace of
+any failure of check/run/recheck phases.
+
+Development Debugging
+---------------------
+
+When writing your DoJobber code you may want to turn on
+the developer debugging capabilities. This is enabled
+when DoJobber is initialized by passing the `dojobber_loglevel`
+keyword argument::
+
+    import logging
+    dojob = DoJobber(dojobber_loglevel=logging.DEBUG)
+
+DoJobber's default is to show `CRITICAL` errors only.
+Acceptable levels are those defined in the logging module.
+
+This can help identify problems when writing your code,
+such as passing a non-iterable as a `DEPS` variable,
+watching as your Job graph is created from the
+classes, etc.
+
+
 Examples
 ========
 
