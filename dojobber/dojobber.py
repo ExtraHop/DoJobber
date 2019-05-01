@@ -2,6 +2,7 @@
 """DoJobber Class."""
 
 # standard
+import logging
 import os
 import sys
 import time
@@ -157,7 +158,7 @@ class DummyJob(Job):
 class DoJobber(object):
     """DoJobber Class."""
 
-    def __init__(self):  # pylint:disable=super-init-not-called
+    def __init__(self, **kwargs):  # pylint:disable=super-init-not-called
         """Initialization."""
         self.graph = digraph()
         self.nodestatus = {}
@@ -180,6 +181,16 @@ class DoJobber(object):
         self._no_act = False
         self._deps = {}
         self._objsrun = []  # which objects ran, for triggering Cleanup
+
+        self._log = logging.getLogger('DoJobber')
+        logtarget = logging.StreamHandler()
+        logtarget.setFormatter(
+            logging.Formatter('DoJobber %(levelname)-19s: %(message)s'))
+        if kwargs.get('dojobber_loglevel'):
+            self._log.setLevel(kwargs['dojobber_loglevel'])
+        else:
+            self._log.setLevel(logging.CRITICAL)
+        self._log.addHandler(logtarget)
 
     def cleanup(self):
         """Run all Cleanup methods for nodes that ran, LIFO.
@@ -513,7 +524,9 @@ class DoJobber(object):
         """Initialize our dependencies."""
 
         classname = self._class_name(theclass)
+        self._log.debug('processing dependencies for %s', classname)
         if classname in self._classmap:
+            self._log.debug(' already processed %s', classname)
             return
 
         self._classmap[classname] = theclass
@@ -543,6 +556,15 @@ class DoJobber(object):
 
                 # In which phase did we do our most recent try
                 'lastphase': -1}
+
+        # Check for common error of DEPS being a single
+        # thing, not iterable, so we can alert programmer
+        try:
+            iter(deps)
+        except TypeError:
+            self._log.critical('DEPS for %s is not iterable; is "%s"',
+                classname, deps)
+            raise
 
         for dep in deps:
             self._init_deps(dep)
