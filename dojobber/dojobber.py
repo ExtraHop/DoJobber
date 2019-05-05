@@ -19,26 +19,33 @@ from pygraph.classes.digraph import digraph
 try:
     import pygraph.readwrite.dot as dot
 except ImportError:
-    sys.stderr.write('** Graphs will not be supported'
-                     ' (cannot import pygraph.readwrite.dot - pip install )\n')
-    dot = None
+    sys.stderr.write(
+        '** Graphs will not be supported'
+        ' (cannot import pygraph.readwrite.dot - pip install )\n'
+    )
+    dot = None  # pylint:disable=invalid-name
 if dot and not distutils.spawn.find_executable('dot'):
-    dot = None
-    sys.stderr.write('** Graphs will not be supported'
-                     ' (no dot executable - install graphviz)\n')
+    dot = None  # pylint:disable=invalid-name
+    sys.stderr.write(
+        '** Graphs will not be supported'
+        ' (no dot executable - install graphviz)\n'
+    )
 DISPLAY = True
 if not distutils.spawn.find_executable('display'):
     DISPLAY = False
-    sys.stderr.write('** display_graph will not be supported'
-                     ' (no display executable - install imagemagick.\n')
+    sys.stderr.write(
+        '** display_graph will not be supported'
+        ' (no display executable - install imagemagick.\n'
+    )
 
-## Disable some pylint warnings
+# Disable some pylint warnings
 # pylint:disable=invalid-name
 # pylint:disable=too-few-public-methods
 
 
-class Job(object):
+class Job(object):  # pylint:disable=too-many-instance-attributes
     """Job Class."""
+
     TRIES = None  # Override in your Job if desired
     RETRY_DELAY = None  # Override in your Job if desired
 
@@ -56,11 +63,15 @@ class Job(object):
                           for mocks and other trickery.
 
             _check_results - the result of the Check, if succesful, else None
-            _check_exception - the exception from Check, if unsuccessful, else None
+            _check_exception - the exception from Check, if unsuccessful,
+                               else None
             _run_results - the result of the Run, if successful, else None
-            _run_exception - the exception from the Run, if unsuccessful, else None
-            _recheck_results - the result of the re-Check, if succesful, else None
-            _recheck_exception - the exception from re-Check, if unsuccessful, else None
+            _run_exception - the exception from the Run, if unsuccessful,
+                             else None
+            _recheck_results - the result of the re-Check, if succesful,
+                               else None
+            _recheck_exception - the exception from re-Check, if unsuccessful,
+                                 else None
         """
 
         self.storage = None
@@ -126,13 +137,15 @@ class RunonlyJob(Job):
               if code != 1:
                   raise RuntimeError('run failed!')
     """
+
     _run_err = None
 
     def Check(self, *_, **dummy_kwargs):
         """Fail if Run not run, else return Run result."""
         if self._check_phase == 'check':
             raise RuntimeError(
-                'Runonly node check intentionally fails first time.')
+                'Runonly node check intentionally fails first time.'
+            )
         else:
             if self._run_exception:
                 raise self._run_exception  # pylint:disable=raising-bad-type
@@ -155,7 +168,7 @@ class DummyJob(Job):
         pass
 
 
-class DoJobber(object):
+class DoJobber(object):  # pylint:disable=too-many-instance-attributes
     """DoJobber Class."""
 
     def __init__(self, **kwargs):  # pylint:disable=super-init-not-called
@@ -166,8 +179,9 @@ class DoJobber(object):
         self.noderesults = {}
         self._run_phase = 0
         self._retry = {}  # retries left, sleep time, etc
-        self._default_tries = None  # number of tries for jobs that set no value
+        self._default_tries = None  # num of tries for Jobs that set no value
         self._default_delay = None  # default delay between Job retries
+        self._default_retry_delay = None  # min delay between retries of a Job
 
         self._args = []  # Args for Check/Run methods
         self._kwargs = {}  # KWArgs for Check/Run methods
@@ -185,7 +199,8 @@ class DoJobber(object):
         self._log = logging.getLogger('DoJobber')
         logtarget = logging.StreamHandler()
         logtarget.setFormatter(
-            logging.Formatter('DoJobber %(levelname)-19s: %(message)s'))
+            logging.Formatter('DoJobber %(levelname)-19s: %(message)s')
+        )
         if kwargs.get('dojobber_loglevel'):
             self._log.setLevel(kwargs['dojobber_loglevel'])
         else:
@@ -206,18 +221,20 @@ class DoJobber(object):
             if callable(getattr(obj, 'Cleanup', None)):
                 if self._debug:
                     sys.stderr.write(
-                        '{}.cleanup running\n'.format(
-                            type(obj).__name__))
+                        '{}.cleanup running\n'.format(type(obj).__name__)
+                    )
                 try:
                     obj.Cleanup()
                     if self._debug:
                         sys.stderr.write(
-                            '{}.cleanup: pass\n'.format(
-                                type(obj).__name__))
+                            '{}.cleanup: pass\n'.format(type(obj).__name__)
+                        )
                 except Exception as err:
                     sys.stderr.write(
                         '{}.cleanup: fail "{}"\n'.format(
-                            type(obj).__name__, err))
+                            type(obj).__name__, err
+                        )
+                    )
                     raise
 
     def partial_success(self):
@@ -232,14 +249,16 @@ class DoJobber(object):
         """Returns T/F if the checknrun had any failure nodes."""
         return not self.success()
 
-    def configure(self,
-                  root,
-                  no_act=False,
-                  verbose=False,
-                  debug=False,
-                  cleanup=True,
-                  default_tries=3,
-                  default_retry_delay=1):
+    def configure(  # pylint:disable=too-many-arguments
+        self,
+        root,
+        no_act=False,
+        verbose=False,
+        debug=False,
+        cleanup=True,
+        default_tries=3,
+        default_retry_delay=1,
+    ):
         """Configure the graph for a specified root Job.
 
         no_act: only run Checks, do not make changes (i.e. no Run)
@@ -249,7 +268,7 @@ class DoJobber(object):
         cleanup: run any Cleanup methods on classes once checknrun is complete
         default_tries: number of tries available for each Job if not otherwise
                        specified via the TRIES attribute
-        default_retry_delay: mininum delay between tries of a specific Job if not
+        default_retry_delay: min delay between tries of a specific Job if not
                              otherwise specified via the RETRY_DELAY attribute
         """
         self._no_act = no_act
@@ -334,10 +353,13 @@ class DoJobber(object):
             # Only 'False' Jobs (have been tried but failed)
             # are retriable - others were either successful or
             # are blocked by other failed Jobs.
-            retriable = ['{} => {}'.format(x, self.nodestatus[x])
-                         for x in self._retry
-                         if self.nodestatus[x] == False and
-                            self._retry[x]['tries'] > 0]
+            retriable = [
+                '{} => {}'.format(x, self.nodestatus[x])
+                for x in self._retry
+                if self.nodestatus[x]  # pylint:disable=singleton-comparison
+                == False
+                and self._retry[x]['tries'] > 0
+            ]
             if not retriable:
                 break
 
@@ -351,7 +373,9 @@ class DoJobber(object):
         if self._cleanup:
             self.cleanup()
 
-    def _checknrun(self, node=None):  # pylint:disable=too-many-branches
+    def _checknrun(
+        self, node=None
+    ):  # pylint:disable=too-many-branches,too-many-statements
         """Check and run each class.
 
         Assumes all storage and other initialization is complete already.
@@ -392,7 +416,8 @@ class DoJobber(object):
             if sleeptime > 0:
                 time.sleep(sleeptime)
             self._retry[nodename]['nexttry'] = (
-                time.time() + self._retry[nodename]['retry_delay'])
+                time.time() + self._retry[nodename]['retry_delay']
+            )
             self._retry[nodename]['lastphase'] = self._run_phase
             self._retry[nodename]['tries'] -= 1
 
@@ -400,7 +425,8 @@ class DoJobber(object):
             self._checknrun_storage[nodename] = {}
             obj._set_storage(
                 self._checknrun_storage[nodename],
-                self._checknrun_storage['__global'])
+                self._checknrun_storage['__global'],
+            )
             self._objsrun.append(obj)
 
             # check / run / check
@@ -410,8 +436,7 @@ class DoJobber(object):
                 obj._check_results = obj.Check(*self._args, **self._kwargs)
                 self._node_succeeded(nodename, obj._check_results)
                 if self._verbose:
-                    sys.stderr.write(
-                        '{}.check: pass\n'.format(nodename))
+                    sys.stderr.write('{}.check: pass\n'.format(nodename))
             except Exception as err:  # pylint:disable=broad-except
                 obj._check_exception = err
                 if self._verbose:
@@ -424,8 +449,12 @@ class DoJobber(object):
                     if self._debug:
                         sys.stderr.write(
                             '  Error was:\n  '
-                            '{}\n'.format(traceback.format_exc().strip()
-                                          .replace('\n', '\n  ')))
+                            '{}\n'.format(
+                                traceback.format_exc()
+                                .strip()
+                                .replace('\n', '\n  ')
+                            )
+                        )
                     return
 
                 # Run the Run method, which may fail with
@@ -435,34 +464,46 @@ class DoJobber(object):
                     obj._run_results = obj.Run(*self._args, **self._kwargs)
                     if self._verbose:
                         sys.stderr.write('%s.run: pass\n' % nodename)
-                except Exception as err:  #pylint:disable=broad-except
+                except Exception as err:  # pylint:disable=broad-except
                     obj._run_exception = err
                     if self._verbose:
                         sys.stderr.write('%s.run: fail\n' % nodename)
                     if self._debug:
                         sys.stderr.write(
                             '  Error was:\n  '
-                            '{}\n'.format(traceback.format_exc().strip()
-                                          .replace('\n', '\n  ')))
+                            '{}\n'.format(
+                                traceback.format_exc()
+                                .strip()
+                                .replace('\n', '\n  ')
+                            )
+                        )
 
                 # Do a recheck
                 try:
                     os.chdir(self._checknrun_cwd)
                     obj._check_phase = 'recheck'
-                    obj._recheck_results = obj.Check(*self._args, **self._kwargs)
-                    self._node_eventually_succeeded(nodename, obj._recheck_results)
+                    obj._recheck_results = obj.Check(
+                        *self._args, **self._kwargs
+                    )
+                    self._node_eventually_succeeded(
+                        nodename, obj._recheck_results
+                    )
                     if self._verbose:
                         sys.stderr.write('%s.recheck: pass\n' % nodename)
                 except Exception as err:  # pylint:disable=broad-except
                     obj._recheck_exception = err
                     if self._verbose:
-                        sys.stderr.write('%s.recheck: fail "%s"\n' %
-                                         (nodename, err))
+                        sys.stderr.write(
+                            '%s.recheck: fail "%s"\n' % (nodename, err)
+                        )
                     if self._debug:
                         sys.stderr.write(
                             '  Error was:\n  {}\n'.format(
-                                traceback.format_exc().strip()
-                                .replace('\n', '\n  ')))
+                                traceback.format_exc()
+                                .strip()
+                                .replace('\n', '\n  ')
+                            )
+                        )
                     self._node_failed(nodename, err)
 
     def _load_class(self):
@@ -475,15 +516,14 @@ class DoJobber(object):
 
         command = ['dot', '-T%s' % fmt]
         proc = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
         stdout, _ = proc.communicate(dot.write(self.graph).encode())
 
         if proc.returncode != 0:
             raise RuntimeError(
-                'Cannot create dot graphs via {}'.format(' '.join(command)))
+                'Cannot create dot graphs via {}'.format(' '.join(command))
+            )
 
         return stdout
 
@@ -518,7 +558,9 @@ class DoJobber(object):
         if cycles.find_cycle(self.graph):
             raise RuntimeError(
                 'Programmer error: graph contains cycles "{}"'.format(
-                    cycles.find_cycle(self.graph)))
+                    cycles.find_cycle(self.graph)
+                )
+            )
 
     def _init_deps(self, theclass):
         """Initialize our dependencies."""
@@ -532,38 +574,42 @@ class DoJobber(object):
         self._classmap[classname] = theclass
         self.graph.add_node(classname)
         deps = getattr(theclass, 'DEPS', [])
-        tries = (getattr(theclass, 'TRIES')
-                 if getattr(theclass, 'TRIES', None) is not None
-                 else self._default_tries)
-        delay = (getattr(theclass, 'RETRY_DELAY')
-                 if getattr(theclass, 'RETRY_DELAY', None) is not None
-                 else self._default_retry_delay)
+        tries = (
+            getattr(theclass, 'TRIES')
+            if getattr(theclass, 'TRIES', None) is not None
+            else self._default_tries
+        )
+        delay = (
+            getattr(theclass, 'RETRY_DELAY')
+            if getattr(theclass, 'RETRY_DELAY', None) is not None
+            else self._default_retry_delay
+        )
         if delay < 0:
             raise RuntimeError(
-                'RETRY_DELAY "{}" cannot be negative'.format(delay))
+                'RETRY_DELAY "{}" cannot be negative'.format(delay)
+            )
         if int(tries) < 1:
             raise RuntimeError('TRIES "{}" must be >= 1.'.format(tries))
 
         self._retry[classname] = {
-                # How many more tries we can have
-                'tries': tries,
-
-                # How long to wait between retries
-                'retry_delay': delay,
-
-                # How soon we can do the next try
-                'nexttry': time.time(),
-
-                # In which phase did we do our most recent try
-                'lastphase': -1}
+            # How many more tries we can have
+            'tries': tries,
+            # How long to wait between retries
+            'retry_delay': delay,
+            # How soon we can do the next try
+            'nexttry': time.time(),
+            # In which phase did we do our most recent try
+            'lastphase': -1,
+        }
 
         # Check for common error of DEPS being a single
         # thing, not iterable, so we can alert programmer
         try:
             iter(deps)
         except TypeError:
-            self._log.critical('DEPS for %s is not iterable; is "%s"',
-                classname, deps)
+            self._log.critical(
+                'DEPS for %s is not iterable; is "%s"', classname, deps
+            )
             raise
 
         for dep in deps:
