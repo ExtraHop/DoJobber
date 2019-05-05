@@ -421,7 +421,23 @@ class DoJobber(object):  # pylint:disable=too-many-instance-attributes
             self._retry[nodename]['lastphase'] = self._run_phase
             self._retry[nodename]['tries'] -= 1
 
-            obj = self._classmap[nodename]()
+            try:
+                obj = self._classmap[nodename]()
+            except Exception as err:
+                self._log.error(
+                    'Could not create Job "%s" - check its __init__', nodename
+                )
+                if self._verbose:
+                    sys.stderr.write('%s.check: fail\n' % nodename)
+                if self._debug:
+                    sys.stderr.write(
+                        '  Could not create job, error was {}\n'.format(
+                            traceback.format_exc().strip().replace('\n', '\n  ')
+                        )
+                    )
+                self._node_failed(nodename, err)
+                return
+
             self._checknrun_storage[nodename] = {}
             obj._set_storage(
                 self._checknrun_storage[nodename],

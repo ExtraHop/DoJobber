@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """DoJobber Tests."""
 
+import logging
+import more_tests
 import unittest
 import dojobber
 import dojobber_example as doex
@@ -251,6 +253,18 @@ class Tests(unittest.TestCase):
                 pizza_success_try=doex.Pizza.TRIES + 1,
                 pop_success_try=doex.Popcorn.TRIES + 1,
                 bowl_success_try=doex.PopcornBowl.TRIES)
+        dojob.checknrun()
+        self.assertEqual(expected, dojob.nodestatus)
+
+    def test_brokeninit(self):
+        """Verify that a broken Job __init__ doesn't kill processing."""
+        expected = {
+            'BrokenInit': False,
+            'Passful': True,
+            'Top00': None,
+        }
+        dojob = dojobber.DoJobber(dojobber_loglevel=logging.NOTSET)
+        dojob.configure(more_tests.Top00, default_retry_delay=0, default_tries=1)
         dojob.checknrun()
         self.assertEqual(expected, dojob.nodestatus)
 
